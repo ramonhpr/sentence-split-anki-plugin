@@ -5,6 +5,7 @@ import sys
 import os
 import requests
 import json
+import re
 from configparser import ConfigParser
 from progress.bar import Bar
 from googletrans import Translator
@@ -15,23 +16,27 @@ kks = pykakasi.kakasi()
 input_path = sys.argv[1]
 ANKI_CONNECT_URL = 'http://localhost:8765'
 
+
 def is_particle(arg):
-    return arg == 'の' or arg == 'は' or arg == 'に' or arg == 'も' or arg == 'で' or arg == 'が'or arg == 'と' or arg == 'ですが' or arg == '\n' or '?' in arg
+    return arg == 'の' or arg == 'は' or arg == 'に' or arg == 'も' or arg == 'で' or arg == 'が' or arg == 'と' \
+           or arg == 'ですが' or arg == '\n' or '?' in arg or 'を' in arg
 
 
 def get_jisho_definition(word):
-    senses =  Word.request(word).data[0]
+    senses = Word.request(word).data[0]
     ret = set()
     for sense in senses:
         ret.update(sense.english_definitions)
     return ret
 
+
 def request(action, **params):
     return {'action': action, 'params': params, 'version': 6}
 
+
 def invoke(action, **params):
-    requestJson = json.dumps(request(action, **params)).encode('utf-8')
-    response = requests.post(ANKI_CONNECT_URL, requestJson).json()
+    request_json = json.dumps(request(action, **params)).encode('utf-8')
+    response = requests.post(ANKI_CONNECT_URL, request_json).json()
     if len(response) != 2:
         raise Exception('response has an unexpected number of fields')
     if 'error' not in response:
@@ -42,8 +47,10 @@ def invoke(action, **params):
         raise Exception(response['error'])
     return response['result']
 
+
 def get_list_of_decks():
     return invoke('deckNames')
+
 
 config = ConfigParser()
 config.read('config.cfg')
@@ -67,12 +74,18 @@ with open(input_path) as fd:
             for i in kks.convert(entry.replace(' ', '')):
                 if not is_particle(i['orig']):
                     try:
-                        back += (f"{i['orig']} ({i['hira']}) {get_jisho_definition(i['orig'])}\n")
+                        back += f"{i['orig']} ({i['hira']}) {get_jisho_definition(i['orig'])}\n"
                     except AttributeError:
                         pass
         else:
-            back += '\n'.join(entry.split())
-            back += '\n'
+            words = entry.split()
+            cache = {}
+            for word in words:
+                if re.compile('[A-Za-zÀ-ÿ\']+').match(word):
+                    if word not in cache:
+                        cache[word] = Translator().translate(word, dest=to_lang, src=from_lang).text
+                    back += f'{word} = {cache[word]}\n'
+        back += '\n'
         gTTS(text=entry, lang=from_lang, slow=False).save(f'/tmp/{entry}.mp3')
         back += Translator().translate(entry, dest=to_lang, src=from_lang).text
         notes.append({
