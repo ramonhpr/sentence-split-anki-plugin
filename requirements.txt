@@ -3,12 +3,10 @@ bs4==0.0.1
 certifi==2021.10.8
 chardet==3.0.4
 charset-normalizer==2.0.12
-click==8.0.3
+click==8.0.4
 colorama==0.4.4
 commonmark==0.9.1
-Cython==0.29.28
 Deprecated==1.2.13
-dyNET38==2.1
 googletrans==3.1.0a0
 gTTS==2.2.3
 h11==0.9.0
@@ -21,11 +19,6 @@ hyperframe==5.2.0
 idna==2.10
 jaconv==0.3
 jisho-api==0.1.8
-libretranslatepy==2.1.1
-lxml==4.8.0
-nagisa==0.2.7
-numpy==1.22.2
-progress==1.6
 pydantic==1.9.0
 Pygments==2.11.2
 pykakasi==2.2.1
@@ -37,4 +30,4 @@ sniffio==1.2.0
 soupsieve==2.3.1
 typing-extensions==4.1.1
 urllib3==1.26.8
-wrapt==1.13.3
+wrapt==1.14.0
