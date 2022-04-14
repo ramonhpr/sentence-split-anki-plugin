@@ -15,6 +15,7 @@ from .packages.phrase_formatter import *
 from .packages.translator import *
 from .packages.translator import LIST_TRANSLATORS
 import googletrans
+import tempfile
 
 phrases_processed = 0
 
@@ -43,7 +44,7 @@ def add_combo_box_translator(layout: QHBoxLayout):
 
 
 def add_combo_box_language(layout: QHBoxLayout):
-    langs = [(lang_name, lang_code) for lang_name, lang_code in googletrans.LANGCODES.items()]
+    langs = list(googletrans.LANGCODES.items())
     source_cb = add_combo_box(layout, langs, 'Source:', 'japanese')
     dest_cb = add_combo_box(layout, langs, 'Destination:', 'english')
     return source_cb, dest_cb
@@ -51,7 +52,6 @@ def add_combo_box_language(layout: QHBoxLayout):
 
 def click_listener():
     global phrases_processed
-    # showInfo(QApplication.clipboard().text())
     old_clipboard = QApplication.clipboard().text()
     dialog, box = showText(old_clipboard, plain_text_edit=True, run=False)
     plain_text_widget: QPlainTextEdit = dialog.layout().itemAt(0).widget()
@@ -86,22 +86,23 @@ def click_listener():
 
     def process_text():
         global phrases_processed
-        for front in text_split:
-            if from_lang == 'ja':
-                formatter = JapanesePhraseFormatter()
-            else:
-                formatter = LanguagePhraseFormatter(GoogleTranslator(from_lang, to_lang))
-            back = formatter.process_phrase(front)
-            deck = deck_cb.currentData()
-            notetype = mw.col.models.by_name("Basic")
-            note = mw.col.new_note(notetype)
-            note['Front'] = front
-            note['Back'] = back.replace('\n', '<br/>')
-            media_filename = f'/tmp/{front.strip()}.mp3'
-            sound_name = mw.col.media.add_file(media_filename)
-            note['Back'] += u'[sound:{}]'.format(sound_name)
-            mw.col.add_note(note, deck['id'])
-            phrases_processed = phrases_processed + 1
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for front in text_split:
+                if from_lang == 'ja':
+                    formatter = JapanesePhraseFormatter()
+                else:
+                    formatter = LanguagePhraseFormatter(GoogleTranslator(from_lang, to_lang))
+                back = formatter.process_phrase(front, tmp_dir)
+                deck = deck_cb.currentData()
+                notetype = mw.col.models.by_name("Basic")
+                note = mw.col.new_note(notetype)
+                note['Front'] = front
+                note['Back'] = back.replace('\n', '<br/>')
+                media_filename = join(tmp_dir, f'{front.strip()}.mp3')
+                sound_name = mw.col.media.add_file(media_filename)
+                note['Back'] += u'[sound:{}]'.format(sound_name)
+                mw.col.add_note(note, deck['id'])
+                phrases_processed = phrases_processed + 1
 
     thread = threading.Thread(target=process_text, daemon=True)
     thread.start()

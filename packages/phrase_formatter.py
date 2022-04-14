@@ -1,6 +1,9 @@
+import tempfile
+
 from .translator import JishoTranslator, GoogleTranslator, Translator
 from .splitter import Splitter, JapaneseSplitter, WhiteSpaceSplitter
 from gtts import gTTS
+from os.path import join
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -14,18 +17,19 @@ class PhraseFormatter(ABC):
     def format(self, word) -> str:
         raise NotImplementedError()
 
-    def process_phrase(self, phrase) -> str:
+    def process_phrase(self, phrase, tts_dir) -> str:
         output = ''
         for word in self.splitter.split(phrase):
             output += self.format(word)
         output += '\n'
-        gTTS(text=phrase, lang=self.translator.from_lang, slow=False).save(f'/tmp/{phrase}.mp3')  # TODO: use tempfile
+        gTTS(text=phrase, lang=self.translator.from_lang, slow=False).save(join(tts_dir, f'{phrase}.mp3'))
         output += GoogleTranslator(self.translator.from_lang, self.translator.to_lang).translate(phrase)
         return output
 
     def run(self, text: str):
-        for phrase in Splitter.split_phrases(text):
-            yield self.process_phrase(phrase)
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for phrase in Splitter.split_phrases(text):
+                yield self.process_phrase(phrase, tmp_dir)
 
     def run_file(self, input_file):
         with open(input_file) as fd:
