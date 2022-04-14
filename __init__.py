@@ -8,8 +8,7 @@ from aqt import gui_hooks, mw
 from aqt.utils import showText, QApplication, QPlainTextEdit, QComboBox, QHBoxLayout, QLabel, QTextCursor
 
 sys.path.append(join(dirname(abspath(__file__)), 'venv', 'lib', 'python3.8', 'site-packages'))
-sys.path.append(join(dirname(abspath(__file__)), 'venv', 'lib', 'python3.8'))
-sys.path.append('/usr/lib/python3.8')  # FIXME
+sys.path.append(join(dirname(abspath(__file__)), 'bundle'))
 
 from .packages.phrase_formatter import *
 from .packages.translator import *
