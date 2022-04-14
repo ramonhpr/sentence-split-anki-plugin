@@ -1,19 +1,22 @@
 from os.path import join, dirname, abspath
 import sys
-
-sys.path.append(join(dirname(abspath(__file__)), 'venv', 'lib', 'python3.8', 'site-packages'))
-sys.path.append(join(dirname(abspath(__file__)), 'venv', 'lib', 'python3.8'))
-sys.path.append('/usr/lib/python3.8')  # FIXME
-
 import threading
 import time
 from typing import List, Tuple, Union, Dict, Any
 
 from aqt import gui_hooks, mw
-from aqt.utils import showText, QApplication, QPlainTextEdit, QComboBox, QHBoxLayout, QLabel
-from .packages.venv_runner import VenvRunner
+from aqt.utils import showText, QApplication, QPlainTextEdit, QComboBox, QHBoxLayout, QLabel, QTextCursor
+
+sys.path.append(join(dirname(abspath(__file__)), 'venv', 'lib', 'python3.8', 'site-packages'))
+sys.path.append(join(dirname(abspath(__file__)), 'venv', 'lib', 'python3.8'))
+sys.path.append('/usr/lib/python3.8')  # FIXME
+
 from .packages.phrase_formatter import *
 from .packages.translator import *
+from .packages.translator import LIST_TRANSLATORS
+import googletrans
+
+phrases_processed = 0
 
 
 def add_combo_box(layout: QHBoxLayout, items: List[Tuple[str, Union[str, Dict[str, Any], None]]],
@@ -36,20 +39,18 @@ def add_combo_box_deck(layout: QHBoxLayout):
 
 
 def add_combo_box_translator(layout: QHBoxLayout):
-    cmd = 'from packages.translator import LIST_TRANSLATORS; print(LIST_TRANSLATORS)'
-    translators = VenvRunner().run_python_command(cmd)
-    return add_combo_box(layout, [(i, None) for i in translators], 'Translator:', 'Jisho')
+    return add_combo_box(layout, [(i, None) for i in LIST_TRANSLATORS], 'Translator:', 'Jisho')
 
 
 def add_combo_box_language(layout: QHBoxLayout):
-    cmd = 'import googletrans; print(googletrans.LANGCODES)'
-    langs = [(lang_name, lang_code) for lang_name, lang_code in VenvRunner().run_python_command(cmd).items()]
+    langs = [(lang_name, lang_code) for lang_name, lang_code in googletrans.LANGCODES.items()]
     source_cb = add_combo_box(layout, langs, 'Source:', 'japanese')
     dest_cb = add_combo_box(layout, langs, 'Destination:', 'english')
     return source_cb, dest_cb
 
 
 def click_listener():
+    global phrases_processed
     # showInfo(QApplication.clipboard().text())
     old_clipboard = QApplication.clipboard().text()
     dialog, box = showText(old_clipboard, plain_text_edit=True, run=False)
@@ -71,31 +72,47 @@ def click_listener():
                 plain_text_widget.setPlainText(
                     f'{plain_text_widget.toPlainText()}\n\n{QApplication.clipboard().text()}'
                 )
+            plain_text_widget.moveCursor(QTextCursor.End)
         QApplication.processEvents()
 
     all_text = plain_text_widget.toPlainText()
     from_lang = source_lang.currentData()
     to_lang = dest_lang.currentData()
-    for front in all_text.split('\n\n'):
-        # back = VenvRunner().run_main(from_lang, to_lang, front)
-        if from_lang == 'ja':
-            formatter = JapanesePhraseFormatter()
-        else:
-            formatter = LanguagePhraseFormatter(GoogleTranslator(from_lang, to_lang))
-        back = formatter.process_phrase(front)
-        deck = deck_cb.currentData()
-        notetype = mw.col.models.by_name("Basic")
-        # TODO: add progress indicator
-        note = mw.col.new_note(notetype)
-        note['Front'] = front
-        note['Back'] = back.replace('\n', '<br/>')
-        media_filename = f'/tmp/{front.strip()}.mp3'
-        sound_name = mw.col.media.add_file(media_filename)
-        note['Back'] += u'[sound:{}]'.format(sound_name)
-        mw.col.add_note(note, deck['id'])
-        print(note.items())
+    text_split = all_text.split('\n\n')
+
+    if len(text_split) == 0 or len(all_text) == 0:
+        return
+    phrases_processed = 0
+
+    def process_text():
+        global phrases_processed
+        for front in text_split:
+            if from_lang == 'ja':
+                formatter = JapanesePhraseFormatter()
+            else:
+                formatter = LanguagePhraseFormatter(GoogleTranslator(from_lang, to_lang))
+            back = formatter.process_phrase(front)
+            deck = deck_cb.currentData()
+            notetype = mw.col.models.by_name("Basic")
+            note = mw.col.new_note(notetype)
+            note['Front'] = front
+            note['Back'] = back.replace('\n', '<br/>')
+            media_filename = f'/tmp/{front.strip()}.mp3'
+            sound_name = mw.col.media.add_file(media_filename)
+            note['Back'] += u'[sound:{}]'.format(sound_name)
+            mw.col.add_note(note, deck['id'])
+            phrases_processed = phrases_processed + 1
+
+    thread = threading.Thread(target=process_text, daemon=True)
+    thread.start()
+
+    win_progress = mw.progress.start(label=f'Processing 0/{len(text_split)} cards')
+    while thread.is_alive():
+        time.sleep(0.01)
+        win_progress.form.label.setText(f'Processing {phrases_processed}/{len(text_split)}')
         QApplication.processEvents()
-    QApplication.processEvents()
+    mw.progress.finish()
+    mw.overview.refresh()
 
 
 def add_link_on_top_toolbar(links, toolbar):
