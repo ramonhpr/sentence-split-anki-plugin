@@ -1,7 +1,8 @@
 from .translator import Translator, JishoTranslator, GoogleTranslator
 from .phrase_formatter import JapanesePhraseFormatter, LanguagePhraseFormatter, PhraseFormatter
 from .splitter import Splitter, JapaneseSplitter, WhiteSpaceSplitter
-import tempfile
+from os.path import exists, isdir
+import pytest
 
 
 class MockTranslator(Translator):
@@ -41,16 +42,32 @@ def test_format():
     assert translator.called
     assert output == f'{word["orig"]} ({word["hira"]}) = translated {word["orig"]}\n'
 
-
-def test_run():
+@pytest.mark.parametrize(
+    'input,expected',
+    [
+        ('english test\n\nanother test',
+         (('english test', 'english = translated english\ntest = translated test\n\nteste de inglês'),
+          ('another test', 'another = translated another\ntest = translated test\n\noutro teste')),)
+    ]
+)
+def test_run(input, expected):
     translator = MockTranslator('en', 'pt')
     splitter = MockSplitter()
     f = LanguagePhraseFormatter(translator, splitter)
-    output = [i for i in f.run('english test')]
+    assert f.temp_dir == ''
+    output = [(i, j) for i, j in f.run(input)]
+    assert f.temp_dir != ''
+    assert not exists(f.temp_dir)  # the property remains but the directory should be deleted
     assert translator.called
     assert splitter.called
-    assert len(output) == 1
-    assert output[0] == 'english = translated english\ntest = translated test\n\nteste de inglês'
+    assert len(output) == 2
+    for i, j in zip(output, expected):
+        phrase, translation = i
+        print(j)
+        expected_phrase, expected_translation = j
+
+        assert phrase == expected_phrase
+        assert translation == expected_translation
 
 
 def test_correct_instance():

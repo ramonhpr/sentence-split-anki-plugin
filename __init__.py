@@ -14,7 +14,6 @@ from .packages.phrase_formatter import *
 from .packages.translator import *
 from .packages.translator import LIST_TRANSLATORS
 import googletrans
-import tempfile
 
 phrases_processed = 0
 
@@ -85,23 +84,21 @@ def click_listener():
 
     def process_text():
         global phrases_processed
-        with tempfile.TemporaryDirectory() as tmp_dir:
-            for front in text_split:
-                if from_lang == 'ja':
-                    formatter = JapanesePhraseFormatter()
-                else:
-                    formatter = LanguagePhraseFormatter(GoogleTranslator(from_lang, to_lang))
-                back = formatter.process_phrase(front, tmp_dir)
-                deck = deck_cb.currentData()
-                notetype = mw.col.models.by_name("Basic")
-                note = mw.col.new_note(notetype)
-                note['Front'] = front
-                note['Back'] = back.replace('\n', '<br/>')
-                media_filename = join(tmp_dir, f'{front.strip()}.mp3')
-                sound_name = mw.col.media.add_file(media_filename)
-                note['Back'] += u'[sound:{}]'.format(sound_name)
-                mw.col.add_note(note, deck['id'])
-                phrases_processed = phrases_processed + 1
+        if from_lang == 'ja':
+            formatter = JapanesePhraseFormatter()
+        else:
+            formatter = LanguagePhraseFormatter(GoogleTranslator(from_lang, to_lang))
+        for front, back in formatter.run(all_text):
+            deck = deck_cb.currentData()
+            notetype = mw.col.models.by_name("Basic")
+            note = mw.col.new_note(notetype)
+            note['Front'] = front
+            note['Back'] = back.replace('\n', '<br/>')
+            media_filename = join(formatter.temp_dir, f'{front.strip()}.mp3')
+            sound_name = mw.col.media.add_file(media_filename)
+            note['Back'] += u'[sound:{}]'.format(sound_name)
+            mw.col.add_note(note, deck['id'])
+            phrases_processed = phrases_processed + 1
 
     thread = threading.Thread(target=process_text, daemon=True)
     thread.start()

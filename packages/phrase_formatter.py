@@ -5,13 +5,18 @@ from .splitter import Splitter, JapaneseSplitter, WhiteSpaceSplitter
 from gtts import gTTS
 from os.path import join
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
 class PhraseFormatter(ABC):
     translator: Translator
     splitter: Splitter
+    _temp_dir: str = field(init=False, repr=False, default='')
+
+    @property
+    def temp_dir(self) -> str:
+        return self._temp_dir
 
     @abstractmethod
     def format(self, word) -> str:
@@ -28,8 +33,9 @@ class PhraseFormatter(ABC):
 
     def run(self, text: str):
         with tempfile.TemporaryDirectory() as tmp_dir:
+            self._temp_dir = tmp_dir
             for phrase in Splitter.split_phrases(text):
-                yield self.process_phrase(phrase, tmp_dir)
+                yield phrase, self.process_phrase(phrase, tmp_dir)
 
     def run_file(self, input_file):
         with open(input_file) as fd:
